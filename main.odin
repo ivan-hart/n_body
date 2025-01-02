@@ -12,11 +12,11 @@ import rl "vendor:raylib"
 
 G: f32 : 9.0e-8
 
-WINDOW_WIDTH :: 800
-WINDOW_HEIGHT :: 600
+WINDOW_WIDTH :: 1920
+WINDOW_HEIGHT :: 1080
 WINDOW_FPS :: 60
 
-MAX_BODIES :: 100
+INIT_BODY_COUNT :: 100
 MASS: f32 : 100
 RADIUS: f32 : 5
 
@@ -28,7 +28,7 @@ Body :: struct {
 }
 
 Game :: struct {
-	bodies: [MAX_BODIES]Body,
+	bodies: [dynamic]Body,
 	mutex:  sync.Mutex,
 }
 
@@ -37,7 +37,7 @@ camera: rl.Camera2D
 
 calculate_force :: proc(pos_1, pos_2: [2]f32) -> [2]f32 {
 
-	// find the direction to body_2 from body_1
+	// find the direction to pos_2 from pos_1
 	dir := [2]f32{pos_2.x - pos_1.x, pos_2.y - pos_1.y}
 
 	// normalize the direction to multiply it with the force
@@ -74,7 +74,8 @@ update :: proc(t: ^thread.Thread) {
 
 main :: proc() {
 
-	rl.InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "1");defer rl.CloseWindow()
+	rl.SetConfigFlags({.FULLSCREEN_MODE})
+	rl.InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "N Body Simulation");defer rl.CloseWindow()
 	rl.SetTargetFPS(WINDOW_FPS)
 
 	camera = rl.Camera2D {
@@ -84,14 +85,18 @@ main :: proc() {
 		rotation = 1,
 	}
 
-	for i in 0 ..< MAX_BODIES {
+	game.bodies = make([dynamic]Body, 0, INIT_BODY_COUNT)
+
+	defer delete(game.bodies)
+
+	for i in 0 ..< INIT_BODY_COUNT {
 		body := Body {
 			pos = {
 				rng.float32_range(-WINDOW_WIDTH / 2, WINDOW_WIDTH / 2),
 				rng.float32_range(-WINDOW_HEIGHT / 2, WINDOW_HEIGHT / 2),
 			},
 		}
-		game.bodies[i] = body
+		append(&game.bodies, body)
 	}
 
 	update_thread := thread.create(update);defer thread.destroy(update_thread)
@@ -105,11 +110,20 @@ main :: proc() {
 		rl.BeginMode2D(camera)
 		sync.lock(&game.mutex)
 
+		if rl.IsKeyPressed(rl.KeyboardKey.SPACE) {
+			mouse_pos := rl.GetMousePosition()
+			append(
+				&game.bodies,
+				Body{pos = {mouse_pos.x - WINDOW_WIDTH / 2, mouse_pos.y - WINDOW_HEIGHT / 2}},
+			)
+			fmt.println(len(game.bodies))
+		}
+
 		for body, index in game.bodies {
 			rl.DrawPixel(i32(body.pos.x), i32(body.pos.y), BODY_COLOR)
 		}
 
-		rl.DrawFPS(-WINDOW_WIDTH / 2, -WINDOW_HEIGHT / 2 + 10)
+		rl.DrawFPS(-WINDOW_WIDTH / 2, -WINDOW_HEIGHT / 2 + 20)
 
 		sync.unlock(&game.mutex)
 		rl.EndMode2D()
